@@ -1,9 +1,11 @@
-# BSMM-lab-7
+# Electricity demand data
 
 ------------------------------------------------------------------------
 
-Starter materials for BSMM-8740 lab-7. See the course website for lab instructions.
+Taylor, J.W. (2003) Short-term electricity demand forecasting using double seasonal exponential smoothing. Journal of the Operational Research Society, 54, 799-805.
 
-Before you wrap up the assignment, make sure all documents are updated on your GitHub repo (i.e. save, stage, commit and **push**).
+The data can be found in the timetk package as timetk::taylor_30_min, a tibble with demensions: 4,032 x 2
 
-Remember -- you do [**not**]{.underline} have to turn in an \*.html file. I will be pulling your work directly from your repository on the [course github site](https://github.com/BSMM-8740-Fall-2023).
+date: A date-time variable in 30-minute increments
+
+value: Electricity demand in Megawatts
