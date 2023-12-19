@@ -1,22 +1,3 @@
----
-title: "BSMM-lab-7"
-subtitle: "BSMM 8740 Fall 2023"
-author: "Add your name here"
-date: "Add the date here"
-format: html
-editor: visual
-self-contained: true
----
-
-::: callout-note
-## REMINDER:
-
-Be sure to edit this document (see above) to include your [**name**]{.underline} (and the [**date**]{.underline})
-
-Before you wrap up the assignment, make sure all documents are updated on your GitHub repo (i.e. save, stage, commit and **push**).
-
-Remember -- you do [**not**]{.underline} have to turn in an \*.html file. I will be pulling your work directly from your repository on the [course github site](https://github.com/BSMM-8740-Fall-2023).
-:::
 
 ## Introduction
 
@@ -57,11 +38,34 @@ data <- timetk::taylor_30_min
 
 Plot the data using the functions `timetk::plot_time_series`, `timetk::plot_acf_diagnostics` (using 100 lags), and `timetk::plot_seasonal_diagnostics`.
 
-::: {.callout-note appearance="simple" icon="false"}
-## YOUR ANSWER:
+
+
 
 ```{r}
+# - plot the data
+timetk::taylor_30_min %>%
+  timetk::plot_time_series(
+    date
+    , value
+    , .title = "Short-term electricity demand (30 min)"
+  )
 
+
+# - plot the acf, pacf
+timetk::taylor_30_min %>%
+  timetk::plot_acf_diagnostics(
+    date
+    , value
+    , .lags = 100
+    , .title = "Lag Diagnostics - Short-term electricity demand (30 min)")
+
+
+# - plot the acf, pacf
+timetk::taylor_30_min %>%
+  timetk::plot_seasonal_diagnostics(
+    date
+    , value
+    , .title = "Seasonal Diagnostics - Short-term electricity demand (30 min)")
 ```
 :::
 
@@ -69,12 +73,18 @@ Plot the data using the functions `timetk::plot_time_series`, `timetk::plot_acf_
 
 The raw data has 30 minutes intervals between data points. Downscale the data to 60 minute intervals, using `timetk::summarise_by_time`, revising the electricity demand (value) variable by adding the two 30-minute intervals in each 60-minute interval. Assign the downscaled data to the variable `taylor_60_min`.
 
-::: {.callout-note appearance="simple" icon="false"}
-## YOUR ANSWER:
+
 
 ```{r}
+# downscale the data (down to a lower frequency of measurement)
 set.seed(8740)
-taylor_60_min <- ?
+taylor_60_min <-
+  timetk::taylor_30_min %>%
+  timetk::summarise_by_time(
+    .date_var = date
+    , .by = "hour"
+    , value = sum(value)
+  )
 ```
 :::
 
@@ -85,11 +95,30 @@ taylor_60_min <- ?
 2.  Prepare the data resample specification with `timetk::tk_time_series_cv_plan()` and plot it with `timetk::plot_time_series_cv_plan`
 3.  Separate the training and test data sets using `rsample` .
 
-::: {.callout-note appearance="simple" icon="false"}
-## YOUR ANSWER:
+
+
 
 ```{r}
+# split
+splits <-
+  taylor_60_min %>%
+  timetk::time_series_split(
+    initial = "2 months"
+    , assess = "1 weeks"
+  )
 
+# plot
+splits %>%
+  timetk::tk_time_series_cv_plan() %>%
+  timetk::plot_time_series_cv_plan(
+    .date_var = date
+    , .value = value
+    , .title = "Cross Validation Plan - Short-term electricity demand (30 min)")
+
+
+# separate
+train <- rsample::training(splits) 
+test  <- rsample::testing(splits) 
 ```
 :::
 
@@ -105,13 +134,20 @@ taylor_60_min <- ?
     4.  add a step to mutate `date_hour`, changing it to a factor,
     5.  add a step to one-hot encode nominal predictors.
 
-::: {.callout-note appearance="simple" icon="false"}
-## YOUR ANSWER:
+
 
 ```{r}
-base_rec <- ?
+base_rec <- 
+  train %>%
+  recipes::recipe(value ~ date)
   
-lm_rec <- ?
+lm_rec <- train %>%
+  recipes::recipe(value ~ .) %>%
+  timetk::step_timeseries_signature(date) %>%
+  recipes::step_select( value, date_index.num, date_month.lbl, date_wday.lbl, date_hour ) %>%
+  step_normalize(date_index.num) %>%
+  recipes::step_mutate(date_hour = date_hour %>% as.factor()) %>%
+  recipes::step_dummy(all_nominal(), one_hot = TRUE)
 ```
 :::
 
@@ -123,15 +159,16 @@ Now we will create a several models to estimate electricity demand, as follows
 2.  Create a model specification for an arima model using engine 'auto_arima'
 3.  Create a model specification for a linear model using engine 'glmnet' and penalty = 0.02, mixture = 0.5
 
-::: {.callout-note appearance="simple" icon="false"}
-## YOUR ANSWER:
 
 ```{r}
-model_ets <- ?
-  
-model_arima <- ?
-  
-model_lm <- ?
+model_ets <- modeltime::exp_smoothing() %>%
+  parsnip::set_engine(engine = "ets")
+
+model_arima <- modeltime::arima_reg() %>%
+  parsnip::set_engine("auto_arima")
+
+model_lm <- parsnip::linear_reg(penalty = 0.02, mixture = 0.5) %>%
+  set_engine("glmnet")
 ```
 :::
 
@@ -145,15 +182,23 @@ Create a workflow **for each model** using `workflows::workflow`.
 2.  Add a model to each workflow
 3.  Fit with the training data
 
-::: {.callout-note appearance="simple" icon="false"}
-## YOUR ANSWER:
+
 
 ```{r}
-workflow_fit_ets <- ?
+workflow_fit_ets <- workflows::workflow() %>%
+  workflows::add_recipe(base_rec) %>%
+  workflows::add_model(model_ets) %>%
+  parsnip::fit(train)
   
-workflow_fit_arima <- ?
+workflow_fit_arima <- workflows::workflow() %>%
+  workflows::add_recipe(base_rec) %>%
+  workflows::add_model(model_arima) %>%
+  parsnip::fit(train)
   
-workflow_fit_lm <- ?
+workflow_fit_lm <- workflows::workflow() %>%
+  workflows::add_recipe(lm_rec) %>%
+  workflows::add_model(model_lm) %>%
+  parsnip::fit(train)
 ```
 :::
 
@@ -169,31 +214,39 @@ In this exercise we'll use the **testing data** with our fitted models.
 2.  Using the table you just created, run a calibration on the **test data** with the function `modeltime::modeltime_calibrate`.
 3.  Compare the accuracy of the models using the `modeltime::modeltime_accuracy()` on the results of the calibration
 
-::: {.callout-note appearance="simple" icon="false"}
-## YOUR ANSWER:
+
 
 ```{r}
-model_tbl <- modeltime::modeltime_table( ? )
+model_tbl <- modeltime::modeltime_table(
+  workflow_fit_ets
+  , workflow_fit_arima
+  , workflow_fit_lm
+)
 
-calibration_tbl <- ?
+calibration_tbl <- model_tbl %>%
+  modeltime::modeltime_calibrate( test )
   
-calibration_tbl %>% ?
+calibration_tbl %>% modeltime::modeltime_accuracy()
 ```
 
-::: callout-important
+::: 
 Which is the best model by the **rmse** metric?
-:::
+It looks like the linear model is the best fit per the rmse metric. This is likely because the data shows the electricity demand is very periodic, and the linear model explicitly includes fourier (periodic) components in the model. The other two models are more general purpose.
 :::
 
 ## Exercise 8: forecast - training data
 
 Use the calibration table with `modeltime::modeltime_forecast` to graphically compare the fits to the training data with the observed values.
 
-::: {.callout-note appearance="simple" icon="false"}
-## YOUR ANSWER:
+
 
 ```{r}
-
+calibration_tbl %>%
+  modeltime::modeltime_forecast(
+    new_data    = test,
+    actual_data = taylor_60_min
+  ) %>%
+  modeltime::plot_modeltime_forecast()
 ```
 :::
 
@@ -204,26 +257,16 @@ Now refit the models using the **full data set** (using the calibration table an
 1.  Use the refit data in the variable refit_tbl, along with `modeltime::modeltime_forecast` and argument `h` = '2 weeks' (remember to also set the `actual_data` argument). This will use the models to forecast electricity demand two weeks into the future.
 2.  Plot the forecast with `modeltime::plot_modeltime_forecast`
 
-::: {.callout-note appearance="simple" icon="false"}
-## YOUR ANSWER:
 
 ```{r}
-refit_tbl <-  ?
+refit_tbl <- calibration_tbl %>%
+  modeltime::modeltime_refit(data = taylor_60_min)
+
+refit_tbl %>%
+  modeltime::modeltime_forecast(h = "2 weeks", actual_data = taylor_60_min) %>%
+  modeltime::plot_modeltime_forecast(
+    .legend_max_width = 12, # For mobile screens
+    .interactive      = TRUE
+  )
 ```
 :::
-
-## Submission
-
-::: callout-warning
-Before you wrap up the assignment, make sure all documents are saved, staged, committed, and pushed to your repository on the course github site.
-
-Remember -- you do **not** have to turn in an \*.html file. I will be pulling your work directly from your repository on the course website.
-:::
-
-## Grading
-
-Total points available: 30 points.
-
-| Component | Points |
-|-----------|--------|
-| Ex 1 - 9  | 30     |
